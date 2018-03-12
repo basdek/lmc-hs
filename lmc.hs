@@ -1,4 +1,3 @@
-import Data.Maybe
 data Op = Add | Sub | Store | Load | Jump | BranZ | BranP| Input | Nop deriving (Show, Eq)
 
 
@@ -40,8 +39,7 @@ mutateRam ram idx val
     in (before ++ [val] ++ after)
   | otherwise = ram
 
-
-execute :: State -> State
+execute :: State -> (Op, State)
 execute s =
   let
     _ram = (ram s)
@@ -50,31 +48,33 @@ execute s =
     currentInstruction = parseInstruction $ _ram !! _ctr
     nopIncreaseCounter = State{acc=_acc, ctr=(_ctr+1), ram=_ram}
     handleInst = case(currentInstruction) of
-      Ins Nop _   -> nopIncreaseCounter
-      Ins Add n   ->  State{acc=(_acc + _ram !! n), ctr = (_ctr+1), ram = _ram}
-      Ins Sub n   ->  State{acc=(_acc - _ram !! n), ctr = (_ctr+1), ram = _ram}
-      Ins Store n ->  State{acc = _acc, ctr = (_ctr + 1), ram = (mutateRam _ram n _acc)}
-      Ins Load n  ->  State{acc = (_ram !! n), ctr = (_ctr + 1), ram = _ram}
-      Ins Jump n  ->  State{acc = _acc, ctr = n, ram = _ram}
-      Ins BranZ n -> if _acc == 0 then  State{acc=_acc, ctr = n, ram = _ram} else nopIncreaseCounter
-      Ins BranP n -> if _acc >= 0 then  State{acc=_acc, ctr = n, ram = _ram} else nopIncreaseCounter
+      Ins Nop _   ->  (Nop, nopIncreaseCounter)
+      Ins Add n   ->  (Add, State{acc=(_acc + _ram !! n), ctr = (_ctr+1), ram = _ram})
+      Ins Sub n   ->  (Sub, State{acc=(_acc - _ram !! n), ctr = (_ctr+1), ram = _ram})
+      Ins Store n ->  (Store, State{acc = _acc, ctr = (_ctr + 1), ram = (mutateRam _ram n _acc)})
+      Ins Load n  ->  (Load, State{acc = (_ram !! n), ctr = (_ctr + 1), ram = _ram})
+      Ins Jump n  ->  (Jump, State{acc = _acc, ctr = n, ram = _ram})
+      Ins BranZ n -> if _acc == 0 then  (BranZ, State{acc=_acc, ctr = n, ram = _ram}) else (Nop, nopIncreaseCounter)
+      Ins BranP n -> if _acc >= 0 then  (BranP, State{acc=_acc, ctr = n, ram = _ram}) else (Nop, nopIncreaseCounter)
     in(handleInst)
+
 
 
 fillOut x = x ++ map (\x -> 0) [1..(100 - (length x))]
 
 statConstruct = State {acc=0, ctr=0, ram = fillOut []}
 
-
-ex ::  IO (State) -> (State -> State) -> IO (State)
-ex s f = do
-  putStr "\n"
-  putStr $ show <$> s
-  ex (f <$> s) f
-
-
+executeLog:: IO(State) -> IO(State)
+executeLog s = do
+  old <- s
+  putStrLn $ show old
+  new <- return . execute $ old
+  if (fst new) /= Nop then  executeLog $ (return $ snd new) else return $ snd new 
 
 
 
-start xs = execute $ State {acc=0, ctr=0, ram= (fillOut xs)}
+
+
+
+start xs = executeLog $ return State {acc=0, ctr=0, ram= (fillOut xs)}
 
